@@ -1,9 +1,7 @@
 module Main where
 
-import           Ed
-import           System.Environment (getArgs)
+import Ed (ed)
+import System.Environment (getArgs)
 
 main :: IO ()
-main = do
-  args <- getArgs
-  ed args
+main = getArgs >>= ed

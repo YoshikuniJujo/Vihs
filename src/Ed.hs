@@ -1,10 +1,8 @@
 module Ed where
 
-import           Data.Maybe
-import           System.Console.Haskeline
-import           Text.Parsec
-
+import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Data.Either
+import System.Console.Haskeline
 import Text.Parsec
 import Text.Parsec.String
 
