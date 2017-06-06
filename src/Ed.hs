@@ -1,11 +1,12 @@
 module Ed where
 
-import           Command
 import           Data.Maybe
-import           Delete
-import           ReadWrite
 import           System.Console.Haskeline
 import           Text.Parsec
+
+import Data.Either
+import Text.Parsec
+import Text.Parsec.String
 
 ed :: [String] -> IO ()
 ed args =
@@ -170,3 +171,51 @@ insert = insert' [] False
                 if str == "."
                     then insert' buff True
                     else insert' (buff ++ [str]) False
+
+deleteLine :: [String] -> Int -> Int ->[String]
+deleteLine str line times
+  | line <= length str && line >= 0 && line - 1 <= length str =
+    (take (line - 1) str) ++ (reverse . take ((length str) - line - times + 1) $ reverse str)
+  | otherwise = str
+
+createBuffer :: String -> IO [String]
+createBuffer path = readFile path >>= \x -> return $ lines x
+
+buffToFile :: String -> [String] -> IO ()
+buffToFile path str = writeFile path $ unlines str
+
+data Command = Command
+  { addr1   :: Maybe Int
+  , addr2   :: Maybe Int
+  , cmdName :: Char
+  , param   :: Maybe String
+  } deriving Show 
+
+setCmd :: String -> Command
+setCmd str = Command
+  (if addrs == []
+    then Nothing
+    else Just (addrs !! 0))
+  (if length addrs < 2
+    then Nothing
+    else Just (addrs !! 1))
+  (last $ (words str) !! 0)
+  (if length (words str) < 2
+    then Nothing
+    else (Just $ (words str) !! 1))
+      where
+        addrs = (parseIntList $ init $ (words str) !! 0)
+
+parseInt :: Parser Int
+parseInt = do
+  value <- many1 digit
+  return (read value)
+
+parseText :: Parser [Int]
+parseText = parseInt `sepBy1` (char ',')
+
+parseIntList :: String -> [Int]
+parseIntList input
+  = case (parse parseText "" input) of
+    Left err -> []
+    Right x -> x
