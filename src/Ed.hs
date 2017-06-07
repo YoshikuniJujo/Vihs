@@ -7,27 +7,12 @@ import Text.Parsec
 import Text.Parsec.String
 
 ed :: [String] -> IO ()
-ed args =
-    if null args
-        then (fromMaybe "" <$> runInputT defaultSettings (getInputLine ""))
-            >>= (\x ->
-                ed'
-                    (setCmd x)
-                    []
-                    []
-                    1
-                    True)
-        else createBuffer (head args)
-            >>= (\x ->
-                ((fromMaybe "" <$> runInputT defaultSettings (getInputLine ""))
-            >>= (\y ->
-                ed'
-                    (setCmd y)
-                    (head args)
-                    x
-                    1
-                    True)))
-                where
+ed args = if null args
+	then fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
+		>>= \x -> ed' (setCmd x) [] [] 1 True
+	else createBuffer (head args) >>= \x -> do
+		y <- fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
+		ed' (setCmd y) (head args) x 1 True
 
 ed' :: Command -> String -> [String] -> Int -> Bool -> IO ()
 ed' cmd fileName buff crrLine saved
