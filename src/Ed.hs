@@ -1,4 +1,4 @@
-module Ed where
+module Ed (ed) where
 
 import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Data.Either
