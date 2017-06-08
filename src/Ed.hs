@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module Ed (ed) where
 
 import Control.Monad (unless)
@@ -6,17 +8,17 @@ import System.Console.Haskeline
 import Text.Parsec
 import Text.Parsec.String
 
-data EdArgs = EdArgs
-        { _fileName :: String
-        , buff     :: [String]
-        , crrLine  :: Int
-        , saved    :: Bool} deriving Show
+data EdArgs = EdArgs {
+	fileName :: String, buff :: [String], crrLine :: Int, saved :: Bool }
+	deriving Show
 
 ed :: [String] -> IO ()
 ed args = do
-        x <- if null args then return [] else createBuffer (head args)
-        y <- inputCmd
-        ed' y (EdArgs (if null args then [] else head args) x 1 True)
+	(bf, fp) <- case args of
+		[] -> return ([], "")
+		f : _ -> (, f) <$> createBuffer f
+	cmd <- inputCmd
+	ed' cmd $ EdArgs {fileName = fp, buff = bf, crrLine = 1, saved = True}
 
 ed' :: Command -> EdArgs -> IO ()
 ed' cmd edArgs = case cmdName cmd of
