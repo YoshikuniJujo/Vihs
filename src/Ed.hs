@@ -1,89 +1,68 @@
 module Ed (ed) where
 
+import Control.Monad (unless)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Data.Either
 import System.Console.Haskeline
 import Text.Parsec
 import Text.Parsec.String
 
-ed :: [String] -> IO ()
-ed args = if null args
-	then fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-		>>= \x -> ed' (setCmd x) [] [] 1 True
-	else createBuffer (head args) >>= \x -> do
-		y <- fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-		ed' (setCmd y) (head args) x 1 True
+data EdArgs = EdArgs
+        { fileName :: String
+        , buff     :: [String]
+        , crrLine  :: Int
+        , saved    :: Bool} deriving Show
 
-ed' :: Command -> String -> [String] -> Int -> Bool -> IO ()
-ed' cmd fileName buff crrLine saved
-	| cmdName cmd == 'q' && saved = return ()
-	| cmdName cmd == 'q' && not saved = do
-		putStrLn "?"
-		newCmd <- fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-		if cmdName (setCmd newCmd) == 'q'
-		then ed' (setCmd newCmd) fileName buff crrLine True
-		else ed' (setCmd newCmd) fileName buff crrLine False
-	| cmdName cmd == 'a' = insert
-		>>= (\x -> (fromMaybe "" <$> runInputT defaultSettings (getInputLine ""))
-		>>= (\y -> ed'
-			(setCmd y)
-			fileName
-			(iCmd buff x $ fromMaybe crrLine (addr1 cmd) + 1)
-			crrLine
-			False))
-	| cmdName cmd == 'i' = insert
-		>>= (\x -> (fromMaybe "" <$> runInputT defaultSettings (getInputLine ""))
-		>>= (\y -> ed'
-			(setCmd y)
-			fileName
-			(iCmd buff x $ fromMaybe crrLine $ addr1 cmd)
-			crrLine
-			False))
-	| cmdName cmd == 'd' = fromMaybe ""
-		<$> runInputT defaultSettings (getInputLine "")
-		>>= (\x -> ed'
-			(setCmd x)
-			fileName
-			(deleteLine
-				buff
-				(fromMaybe crrLine $ addr1 cmd)
-				(fromMaybe 1 $ addr2 cmd))
-			crrLine
-			False)
-	| cmdName cmd == 'l' = do
-		let allLines = map (++"$") buff
-		putStr $ unlines $ drop
-			(fromMaybe crrLine (addr1 cmd) - 1)
-			(reverse
-				(drop
-					(length allLines - (fromMaybe 1 (addr1 cmd) + fromMaybe 1 (addr2 cmd) - 1))
-					$ reverse allLines))
-		fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-			>>= (\x -> ed' (setCmd x) fileName buff crrLine saved)
-	| cmdName cmd == 'n' = do
-		let infNo = map show (take (length buff) [1, 2..])
-		let allLines = zipWith (++) (map (take 8 . (++ repeat ' ')) infNo) (map (++"$") buff)
-		putStr $ unlines $
-			drop
-				(fromMaybe crrLine (addr1 cmd) - 1)
-				(reverse
-					(drop
-						(length allLines - (fromMaybe 1 (addr1 cmd) + fromMaybe 1 (addr2 cmd) - 1))
-						$ reverse allLines))
-		fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-			>>= (\x -> ed' (setCmd x) fileName buff crrLine saved)
-	| cmdName cmd == 'w' = if isNothing $ param cmd
-		then	putStrLn "?"
-				>> fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-				>>= (\x -> ed' (setCmd x) fileName buff crrLine saved)
-		else	buffToFile (fromJust (param cmd)) buff
-				>> (print (length (unlines buff))
-				>> fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-				>>= (\x -> ed' (setCmd x) fileName buff crrLine True))
-	| otherwise = do
-		putStrLn "?"
-		fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
-			>>= (\x -> ed' (setCmd x) fileName buff crrLine saved)
+ed :: [String] -> IO ()
+ed args = do
+        x <- if null args then return [] else createBuffer (head args)
+        y <- inputCmd
+        ed' y (EdArgs (if null args then [] else head args) x 1 True)
+
+ed' :: Command -> EdArgs -> IO ()
+ed' cmd edArgs = case cmdName cmd of
+        'q' ->
+                  unless (saved edArgs) $ do
+                          putStrLn "?"
+                          newCmd <- inputCmd
+                          ed' newCmd edArgs {saved = cmdName newCmd == 'q'}
+        'a' ->
+                  insert >>= (\x -> inputCmd >>=
+                  (`ed'` edArgs {buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) (addr1 cmd) + 1, saved = False}))
+        'i' ->
+                  insert >>= (\x -> inputCmd >>=
+                  (`ed'` edArgs {buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) $ addr1 cmd, saved = False}))
+        'd' ->
+                  inputCmd >>=
+                  (`ed'` edArgs {buff = deleteLine (buff edArgs) (fromMaybe (crrLine edArgs) $ addr1 cmd) (fromMaybe 1 $ addr2 cmd), saved = False})
+        'l' -> do
+                  printBuff cmd edArgs $ addDll $ buff edArgs
+                  inputCmd >>= (`ed'` edArgs)
+        'n' -> do
+                  let infNo = map show (take (length $ buff edArgs) [1, 2..])
+                  printBuff cmd edArgs $ zipWith (++) (map (take 8 . (++ repeat ' ')) infNo) (addDll $ buff edArgs)
+                  inputCmd >>= (`ed'` edArgs)
+        'w' ->
+                  if isNothing $ param cmd
+                          then putStrLn "?"
+                                  >> inputCmd >>= (`ed'` edArgs)
+                          else buffToFile (fromJust (param cmd)) (buff edArgs)
+                                  >> (print (length (unlines $ buff edArgs))
+                                  >> inputCmd >>= (`ed'` edArgs {saved = True}))
+        _ ->
+                  putStrLn "?" >> inputCmd >>= (`ed'` edArgs)
+
+inputCmd :: IO Command
+inputCmd = setCmd . fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
+
+addDll :: [String] -> [String]
+addDll = map (++"$")
+
+printBuff :: Command -> EdArgs -> [String] -> IO ()
+printBuff cmd edArgs allLines =
+        putStr $ unlines $ drop
+                (fromMaybe (crrLine edArgs) (addr1 cmd) - 1)
+                (reverse (drop (length allLines - (fromMaybe 1 (addr1 cmd) + fromMaybe 1 (addr2 cmd) - 1)) $ reverse allLines))
 
 iCmd :: [String] -> [String] -> Int -> [String]
 iCmd buff buff2 line =
