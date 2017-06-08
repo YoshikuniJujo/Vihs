@@ -7,3 +7,7 @@ Vim like Text editor by Haskell.
 ## How to run
 `stack build` to build Vihs.  
 `stack exec vihs` to run Vihs.  
+
+## コマンド
+
+* q: 終了させる。2回連続で書き込みがなくても終了させる
