@@ -2,13 +2,12 @@ module Ed (ed) where
 
 import Control.Monad (unless)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
-import Data.Either
 import System.Console.Haskeline
 import Text.Parsec
 import Text.Parsec.String
 
 data EdArgs = EdArgs
-        { fileName :: String
+        { _fileName :: String
         , buff     :: [String]
         , crrLine  :: Int
         , saved    :: Bool} deriving Show
@@ -39,7 +38,7 @@ ed' cmd edArgs = case cmdName cmd of
                   printBuff cmd edArgs $ addDll $ buff edArgs
                   inputCmd >>= (`ed'` edArgs)
         'n' -> do
-                  let infNo = map show (take (length $ buff edArgs) [1, 2..])
+                  let infNo = map show (take (length $ buff edArgs) [1 :: Int, 2..])
                   printBuff cmd edArgs $ zipWith (++) (map (take 8 . (++ repeat ' ')) infNo) (addDll $ buff edArgs)
                   inputCmd >>= (`ed'` edArgs)
         'w' ->
@@ -65,20 +64,20 @@ printBuff cmd edArgs allLines =
                 (reverse (drop (length allLines - (fromMaybe 1 (addr1 cmd) + fromMaybe 1 (addr2 cmd) - 1)) $ reverse allLines))
 
 iCmd :: [String] -> [String] -> Int -> [String]
-iCmd buff buff2 line =
-    take (line - 1) buff ++ buff2 ++ reverse (take (length buff - line + 1) (reverse buff))
+iCmd bf bf2 line =
+    take (line - 1) bf ++ bf2 ++ reverse (take (length bf - line + 1) (reverse bf))
 
 insert :: IO [String]
 insert = insert' [] False
     where
         insert' :: [String] -> Bool -> IO [String]
-        insert' buff done
-            | done = return buff
+        insert' bf done
+            | done = return bf
             | otherwise = do
                 str <- getLine
                 if str == "."
-                    then insert' buff True
-                    else insert' (buff ++ [str]) False
+                    then insert' bf True
+                    else insert' (bf ++ [str]) False
 
 deleteLine :: [String] -> Int -> Int ->[String]
 deleteLine str line times
@@ -125,5 +124,5 @@ parseText = parseInt `sepBy1` (char ',')
 parseIntList :: String -> [Int]
 parseIntList input
   = case (parse parseText "" input) of
-    Left err -> []
+    Left _err -> []
     Right x -> x
