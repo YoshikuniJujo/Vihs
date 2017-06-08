@@ -28,26 +28,45 @@ ed' cmd edArgs = case cmdName cmd of
 	'q' -> unless (saved edArgs) $ do
 		putStrLn "?"
 		newCmd <- inputCmd
-		ed' newCmd edArgs {saved = cmdName newCmd == 'q'}
-	'a' -> insert >>= (\x -> inputCmd >>=
-		(`ed'` edArgs {buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) (addr1 cmd) + 1, saved = False}))
-	'i' -> insert >>= (\x -> inputCmd >>=
-		(`ed'` edArgs {buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) $ addr1 cmd, saved = False}))
-	'd' -> inputCmd >>=
-		(`ed'` edArgs {buff = deleteLine (buff edArgs) (fromMaybe (crrLine edArgs) $ addr1 cmd) (fromMaybe 1 $ addr2 cmd), saved = False})
+		let newArgs = edArgs { saved = cmdName newCmd == 'q' }
+		ed' newCmd newArgs
+	'a' -> do
+		x <- insert
+		newCmd <- inputCmd
+		ed' newCmd edArgs {
+			buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) (addr1 cmd) + 1,
+			saved = False }
+	'i' -> do
+		x <- insert
+		newCmd <- inputCmd
+		ed' newCmd edArgs {
+			buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) $ addr1 cmd,
+			saved = False }
+	'd' -> do
+		newCmd <- inputCmd
+		ed' newCmd edArgs {
+			buff = deleteLine (buff edArgs) (fromMaybe (crrLine edArgs) $ addr1 cmd) (fromMaybe 1 $ addr2 cmd),
+			saved = False }
 	'l' -> do
 		printBuff cmd edArgs $ addDll $ buff edArgs
-		inputCmd >>= (`ed'` edArgs)
+		newCmd <- inputCmd
+		ed' newCmd edArgs
 	'n' -> do
 		let infNo = map show (take (length $ buff edArgs) [1 :: Int, 2..])
 		printBuff cmd edArgs $ zipWith (++) (map (take 8 . (++ repeat ' ')) infNo) (addDll $ buff edArgs)
-		inputCmd >>= (`ed'` edArgs)
+		newCmd <- inputCmd
+		ed' newCmd edArgs
 	'w' -> if isNothing $ param cmd
-		then putStrLn "?" >> inputCmd >>= (`ed'` edArgs)
-		else buffToFile (fromJust (param cmd)) (buff edArgs)
-			>> (print (length (unlines $ buff edArgs))
-			>> inputCmd >>= (`ed'` edArgs {saved = True}))
-	_ -> putStrLn "?" >> inputCmd >>= (`ed'` edArgs)
+		then do	putStrLn "?"
+			newCmd <- inputCmd
+			ed' newCmd edArgs
+		else do	buffToFile (fromJust (param cmd)) (buff edArgs)
+			print . length . unlines $ buff edArgs
+			newCmd <- inputCmd
+			ed' newCmd edArgs {saved = True}
+	_ -> do	putStrLn "?"
+		newCmd <- inputCmd
+		ed' newCmd edArgs
 
 inputCmd :: IO Command
 inputCmd = setCmd . fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
