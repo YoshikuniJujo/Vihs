@@ -2,7 +2,6 @@
 
 module Ed (ed) where
 
-import Control.Monad (unless)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
 import System.Console.Haskeline
 import Text.Parsec
@@ -29,53 +28,60 @@ ed args = do
 	(bf, fp) <- case args of
 		[] -> return ([], "")
 		f : _ -> (, f) <$> createBuffer f
-	cmd <- inputCmd
-	ed' cmd $ initialEdArgs { fileName = fp, buff = bf }
+	doWhile initialEdArgs { fileName = fp, buff = bf } ed'
 
-ed' :: Command -> EdArgs -> IO ()
-ed' cmd edArgs_ = case cmdName cmd of
-	'q' -> unless (saved edArgs_ || tryQuitOnce edArgs_) $ do
-		putStrLn "?"
-		newCmd <- inputCmd
-		let newArgs = edArgs_ { tryQuitOnce = True }
-		ed' newCmd newArgs
-	'a' -> do
-		x <- insert
-		newCmd <- inputCmd
-		ed' newCmd edArgs {
-			buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) (addr1 cmd) + 1,
-			saved = False }
-	'i' -> do
-		x <- insert
-		newCmd <- inputCmd
-		ed' newCmd edArgs {
-			buff = iCmd (buff edArgs) x $ fromMaybe (crrLine edArgs) $ addr1 cmd,
-			saved = False }
-	'd' -> do
-		newCmd <- inputCmd
-		ed' newCmd edArgs {
-			buff = deleteLine (buff edArgs) (fromMaybe (crrLine edArgs) $ addr1 cmd) (fromMaybe 1 $ addr2 cmd),
-			saved = False }
-	'l' -> do
-		printBuff cmd edArgs $ addDll $ buff edArgs
-		newCmd <- inputCmd
-		ed' newCmd edArgs
-	'n' -> do
-		let infNo = map show (take (length $ buff edArgs) [1 :: Int, 2..])
-		printBuff cmd edArgs $ zipWith (++) (map (take 8 . (++ repeat ' ')) infNo) (addDll $ buff edArgs)
-		newCmd <- inputCmd
-		ed' newCmd edArgs
-	'w' -> if isNothing $ param cmd
-		then do	putStrLn "?"
-			newCmd <- inputCmd
-			ed' newCmd edArgs
-		else do	buffToFile (fromJust (param cmd)) (buff edArgs)
-			print . length . unlines $ buff edArgs
-			newCmd <- inputCmd
-			ed' newCmd edArgs {saved = True}
-	_ -> do	putStrLn "?"
-		newCmd <- inputCmd
-		ed' newCmd edArgs
+doWhile :: Monad m => a -> (a -> m (Maybe a)) -> m ()
+doWhile x act = act x >>= maybe (return ()) (`doWhile` act)
+
+ed' :: EdArgs -> IO (Maybe EdArgs)
+ed' edArgs_ = do
+	cmd <- inputCmd
+	case cmdName cmd of
+		'q'	| saved edArgs_ || tryQuitOnce edArgs_ -> return Nothing
+			| otherwise -> do
+				putStrLn "?"
+				let newArgs = edArgs_ { tryQuitOnce = True }
+				return $ Just newArgs
+		'a' -> do
+			x <- insert
+			let newArgs = edArgs {
+				buff = iCmd (buff edArgs) x
+					$ fromMaybe (crrLine edArgs) (addr1 cmd) + 1,
+				saved = False }
+			return $ Just newArgs
+		'i' -> do
+			x <- insert
+			let newArgs = edArgs {
+				buff = iCmd (buff edArgs) x
+					$ fromMaybe (crrLine edArgs) $ addr1 cmd,
+				saved = False }
+			return $ Just newArgs
+		'd' -> do
+			let newArgs = edArgs {
+				buff = deleteLine
+					(buff edArgs)
+					(fromMaybe (crrLine edArgs) $ addr1 cmd)
+					(fromMaybe 1 $ addr2 cmd),
+				saved = False }
+			return $ Just newArgs
+		'l' -> do
+			printBuff cmd edArgs $ addDll $ buff edArgs
+			return $ Just edArgs
+		'n' -> do
+			let infNo = map show (take (length $ buff edArgs) [1 :: Int, 2..])
+			printBuff cmd edArgs $ zipWith (++) (map (take 8 . (++ repeat ' ')) infNo) (addDll $ buff edArgs)
+			return $ Just edArgs
+		'w' -> do
+			newArgs <- if isNothing $ param cmd
+			then do	putStrLn "?"
+				return edArgs
+			else do	buffToFile (fromJust (param cmd)) (buff edArgs)
+				print . length . unlines $ buff edArgs
+				return edArgs {saved = True}
+			return $ Just newArgs
+		_ -> do	putStrLn "?"
+			let newArgs = edArgs
+			return $ Just newArgs
 	where
 	edArgs = edArgs_ { tryQuitOnce = False }
 
