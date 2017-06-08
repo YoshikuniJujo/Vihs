@@ -9,11 +9,20 @@ import Text.Parsec
 import Text.Parsec.String
 
 data EdArgs = EdArgs {
-	fileName :: String, buff :: [String], crrLine :: Int, saved :: Bool }
+	fileName :: String,
+	buff :: [String],
+	crrLine :: Int,
+	saved :: Bool,
+	tryQuitOnce :: Bool }
 	deriving Show
 
 initialEdArgs :: EdArgs
-initialEdArgs = EdArgs { fileName = "", buff = [], crrLine = 1, saved = True }
+initialEdArgs = EdArgs {
+	fileName = "",
+	buff = [],
+	crrLine = 1,
+	saved = True,
+	tryQuitOnce = False }
 
 ed :: [String] -> IO ()
 ed args = do
@@ -21,14 +30,14 @@ ed args = do
 		[] -> return ([], "")
 		f : _ -> (, f) <$> createBuffer f
 	cmd <- inputCmd
-	ed' cmd $ EdArgs {fileName = fp, buff = bf, crrLine = 1, saved = True}
+	ed' cmd $ initialEdArgs { fileName = fp, buff = bf }
 
 ed' :: Command -> EdArgs -> IO ()
-ed' cmd edArgs = case cmdName cmd of
-	'q' -> unless (saved edArgs) $ do
+ed' cmd edArgs_ = case cmdName cmd of
+	'q' -> unless (saved edArgs_ || tryQuitOnce edArgs_) $ do
 		putStrLn "?"
 		newCmd <- inputCmd
-		let newArgs = edArgs { saved = cmdName newCmd == 'q' }
+		let newArgs = edArgs_ { tryQuitOnce = True }
 		ed' newCmd newArgs
 	'a' -> do
 		x <- insert
@@ -67,6 +76,8 @@ ed' cmd edArgs = case cmdName cmd of
 	_ -> do	putStrLn "?"
 		newCmd <- inputCmd
 		ed' newCmd edArgs
+	where
+	edArgs = edArgs_ { tryQuitOnce = False }
 
 inputCmd :: IO Command
 inputCmd = setCmd . fromMaybe "" <$> runInputT defaultSettings (getInputLine "")
